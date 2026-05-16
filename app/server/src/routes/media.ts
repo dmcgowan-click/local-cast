@@ -1,12 +1,13 @@
 import { Router, Request, Response } from 'express';
-import { authMiddleware } from '../middleware/auth';
 import { browseMedia } from '../services/s3';
 import { generateSignedUrl } from '../services/cloudfront';
 
-/** Router handling media browsing and signed URL generation. All routes require authentication. */
+/**
+ * Router handling media browsing and signed URL generation.
+ * Authentication is enforced at the API Gateway layer via a Lambda authorizer —
+ * only requests with a valid session cookie reach these routes.
+ */
 export const mediaRouter = Router();
-
-mediaRouter.use(authMiddleware);
 
 /**
  * GET /browse — Lists folders and files under the given S3 prefix.

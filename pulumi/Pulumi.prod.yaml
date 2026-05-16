@@ -1,0 +1,13 @@
+config:
+  aws:region: ap-southeast-2
+  local-cast:projectName: local-cast
+  local-cast:domain: cast.dmcgowan.click
+  local-cast:mediaBucketName: dmcgowan-cloudstore
+  local-cast:hostedZoneDomain: dmcgowan.click
+  local-cast:credentialsSecretDescription: "Local Cast user credentials (username, passwordHash, jwtSecret)"
+  local-cast:cf:
+    privateKeyDescription: "CloudFront signing private key for generating signed URLs"
+    publicKeyComment: "Public key for Local Cast CloudFront signed URLs"
+    keyGroupComment: "Key group for Local Cast signed URL access"
+    oacDescription: "OAC for Local Cast S3 bucket access"
+    cdnComment: "Local Cast CDN"
