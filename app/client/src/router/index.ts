@@ -11,7 +11,7 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/login', name: 'login', component: Login },
-    { path: '/', name: 'browse', component: MediaBrowser, meta: { requiresAuth: true } },
+    { path: '/:prefix(.*)*', name: 'browse', component: MediaBrowser, meta: { requiresAuth: true } },
   ],
 });
 

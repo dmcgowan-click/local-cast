@@ -79,14 +79,15 @@
  * Media browser view. Lists S3 folders and files with breadcrumb navigation,
  * plays media via Chromecast when available or falls back to local HTML5 playback.
  */
-import { ref, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, computed, onMounted, watch } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { browse, getSignedUrl, logout } from '@/services/api';
 import { castAvailable, castState, castMedia, getContentType, isVideo } from '@/services/cast';
 import CastButton from './CastButton.vue';
 import LoadingSpinner from './LoadingSpinner.vue';
 
 const router = useRouter();
+const route = useRoute();
 
 const currentPrefix = ref('');
 const folders = ref<string[]>([]);
@@ -143,7 +144,7 @@ async function load(prefix: string) {
 }
 
 function navigateTo(prefix: string) {
-  load(prefix);
+  router.push('/' + prefix);
 }
 
 /**
@@ -190,7 +191,17 @@ async function handleLogout() {
   router.push('/login');
 }
 
-onMounted(() => load(''));
+function prefixFromRoute(): string {
+  const raw = route.params.prefix;
+  if (!raw) return '';
+  return Array.isArray(raw) ? raw.join('/') + '/' : raw + '/';
+}
+
+watch(() => route.params.prefix, () => {
+  load(prefixFromRoute());
+});
+
+onMounted(() => load(prefixFromRoute()));
 </script>
 
 <style scoped>
