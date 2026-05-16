@@ -51,6 +51,17 @@ export class CdnDistribution extends pulumi.ComponentResource {
       description: args.oacDescription,
     }, { parent: this });
 
+    /** CloudFront function to strip the /media prefix before forwarding to the S3 origin. */
+    const stripMediaPrefix = new aws.cloudfront.Function("strip-media-prefix", {
+      name: `${args.projectName}-strip-media-prefix`,
+      runtime: "cloudfront-js-2.0",
+      code: `function handler(event) {
+  var request = event.request;
+  request.uri = request.uri.replace(/^\\/media/, '');
+  return request;
+}`,
+    }, { parent: this });
+
     /** Response headers policy enforcing HSTS, X-Frame-Options, and X-Content-Type-Options. */
     const responseHeadersPolicy = new aws.cloudfront.ResponseHeadersPolicy("security-headers", {
       name: `${args.projectName}-security-headers`,
@@ -163,6 +174,10 @@ export class CdnDistribution extends pulumi.ComponentResource {
           trustedKeyGroups: [args.cfKeyGroupId],
           cachePolicyId: "658327ea-f89d-4fab-a63d-7e88639e58f6", // CachingOptimized
           responseHeadersPolicyId: responseHeadersPolicy.id,
+          functionAssociations: [{
+            eventType: "viewer-request",
+            functionArn: stripMediaPrefix.arn,
+          }],
         },
       ],
 

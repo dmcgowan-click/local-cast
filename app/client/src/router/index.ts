@@ -1,3 +1,7 @@
+/**
+ * Vue Router configuration. Defines the login and media-browse routes
+ * and enforces authentication via a global navigation guard.
+ */
 import { createRouter, createWebHistory } from 'vue-router';
 import Login from '@/components/Login.vue';
 import MediaBrowser from '@/components/MediaBrowser.vue';

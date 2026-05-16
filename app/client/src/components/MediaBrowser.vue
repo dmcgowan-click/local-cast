@@ -75,6 +75,10 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Media browser view. Lists S3 folders and files with breadcrumb navigation,
+ * plays media via Chromecast when available or falls back to local HTML5 playback.
+ */
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { browse, getSignedUrl, logout } from '@/services/api';
@@ -94,6 +98,7 @@ const playbackUrl = ref('');
 const playbackTitle = ref('');
 const playbackIsVideo = ref(false);
 
+/** Builds breadcrumb segments from the current S3 prefix for navigation. */
 const breadcrumbs = computed(() => {
   if (!currentPrefix.value) return [];
   const parts = currentPrefix.value.replace(/\/$/, '').split('/');
@@ -103,6 +108,7 @@ const breadcrumbs = computed(() => {
   }));
 });
 
+/** Extracts the last path segment from a folder prefix for display. */
 function displayName(folder: string): string {
   const parts = folder.replace(/\/$/, '').split('/');
   return parts[parts.length - 1];
@@ -112,6 +118,7 @@ function isVideoFile(name: string): boolean {
   return isVideo(name);
 }
 
+/** Formats a byte count into a human-readable size string. */
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -119,6 +126,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
+/** Fetches folder and file listings from the API for the given S3 prefix. */
 async function load(prefix: string) {
   loading.value = true;
   error.value = '';
@@ -138,6 +146,10 @@ function navigateTo(prefix: string) {
   load(prefix);
 }
 
+/**
+ * Requests a signed URL and plays the file via Chromecast if connected,
+ * otherwise falls back to local HTML5 playback.
+ */
 async function playFile(file: { key: string; name: string }) {
   loading.value = true;
   try {
@@ -162,6 +174,7 @@ async function playFile(file: { key: string; name: string }) {
   }
 }
 
+/** Opens the inline HTML5 audio/video player for local playback. */
 function playLocally(url: string, name: string) {
   playbackUrl.value = url;
   playbackTitle.value = name;
