@@ -3,3 +3,4 @@ node_modules/
 *.local
 .Pulumi*
 pulumi/.pulumi/
+dist

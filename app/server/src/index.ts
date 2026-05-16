@@ -15,7 +15,7 @@ const PORT = parseInt(process.env.PORT || '8080', 10);
 app.use(express.json());
 app.use(cookieParser());
 
-app.use('/', healthRouter);
+app.use('/api', healthRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/media', mediaRouter);
 

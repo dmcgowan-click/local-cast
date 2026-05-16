@@ -15,7 +15,13 @@ A cloud-hosted web application for browsing audio and video files stored in S3 a
                                           │    ┌──────────────────┐     ┌──────────────────────────┐
                                           └───▶│  API Gateway     │────▶│  Lambda (container image) │
                                                │  (HTTP API)      │     │  (backend API)            │
-                                               └──────────────────┘     └──────────────────────────┘
+                                               │  + authorizer    │     └──────────────────────────┘
+                                               └──────────────────┘
+                                                        │
+                                               ┌──────────────────┐
+                                               │  Lambda authorizer│
+                                               │  (JWT validation) │
+                                               └──────────────────┘
 ```
 
 All traffic flows through a single CloudFront distribution:
@@ -37,7 +43,7 @@ The backend runs on container-based Lambda (arm64) which provides native **scale
 | Infrastructure | Pulumi (TypeScript) |
 | CDN / HTTPS | CloudFront + ACM |
 | Media Storage | S3 (`dmcgowan-cloudstore`) |
-| Auth | Username/password, bcrypt, session cookies |
+| Auth | Username/password, bcrypt, JWT session cookies, Lambda authorizer |
 | DNS | Route 53 |
 
 ## Features
@@ -52,10 +58,13 @@ The backend runs on container-based Lambda (arm64) which provides native **scale
 
 ```
 ├── app/
+│   ├── authorizer/          # Lambda authorizer (JWT session validation)
 │   ├── client/              # Vue.js frontend (SPA)
 │   ├── server/              # Node.js backend (Lambda container)
 │   └── Dockerfile
-├── pulumi/                  # Infrastructure as code
+├── pulumi/                  # Infrastructure as code (Pulumi + TypeScript)
+│   ├── components/          # Reusable Pulumi component resources
+│   └── index.ts             # Stack entrypoint
 ├── Makefile                 # Build and deploy targets
 ├── REQUIREMENTS-FINAL.md    # Detailed requirements specification
 └── REQUIREMENTS-DRAFT.md    # Initial draft requirements
@@ -74,25 +83,22 @@ All build steps rsync source to `/home/ubuntu/workspace/` before running (mounte
 
 ```bash
 # Prepare Pulumi dependencies
-make prepare
-
-# Prepare app dependencies
-make prepare-app
-
-# Build frontend
-make build-app
+make prepare-infra
 
 # Build backend Docker image
 make build-docker
 
-# Deploy infrastructure
-make deploy-infra
+# Build and publish backend image to ECR
+make publish-docker
 
-# Deploy application (push image to ECR, sync frontend to S3)
-make deploy-app
+# Build the Lambda authorizer
+make build-authorizer
 
-# Run everything
-make deploy
+# Preview infrastructure changes
+make preview-infra
+
+# Deploy infrastructure (builds authorizer automatically)
+make up-infra
 ```
 
 ## API Endpoints
@@ -103,7 +109,14 @@ make deploy
 | `POST` | `/api/auth/logout` | Clear session | Yes |
 | `GET` | `/api/media/browse` | List folders and files at a given prefix | Yes |
 | `GET` | `/api/media/url` | Get a signed URL for a media file | Yes |
-| `GET` | `/health` | Health check | No |
+| `GET` | `/api/health` | Health check | No |
+
+## Authentication
+
+Authentication uses a two-layer approach:
+
+1. **Login** — `POST /api/auth/login` validates credentials (bcrypt) and issues a signed JWT session cookie
+2. **API Gateway authorizer** — A Lambda authorizer validates the JWT session cookie on protected routes (`/api/media/*`) before the request reaches the backend. This moves auth enforcement to the infrastructure layer, keeping the backend stateless and simple.
 
 ## Security
 
@@ -112,4 +125,5 @@ make deploy
 - Credentials stored in AWS Secrets Manager
 - Session cookies: `HttpOnly`, `Secure`, `SameSite=Strict`
 - Prefix parameter validated to prevent path traversal
+- API Gateway Lambda authorizer enforces authentication at the infrastructure layer
 - Least-privilege IAM on Lambda execution role
