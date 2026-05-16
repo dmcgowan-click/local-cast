@@ -19,7 +19,6 @@ function isSupportedFile(key: string): boolean {
 
 /** Returns true if the prefix falls within the allowed top-level directories (Music/, Video/). */
 function isAllowedPrefix(prefix: string): boolean {
-  if (prefix === '') return true;
   return ALLOWED_PREFIXES.some((allowed) => prefix.startsWith(allowed));
 }
 
