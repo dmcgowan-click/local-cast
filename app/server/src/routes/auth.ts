@@ -29,6 +29,7 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
 
     const token = jwt.sign({ sub: username }, creds.jwtSecret, {
       expiresIn: `${SESSION_EXPIRY_HOURS}h`,
+      algorithm: 'HS256',
     });
 
     res.cookie('session', token, {

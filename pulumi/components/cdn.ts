@@ -51,6 +51,26 @@ export class CdnDistribution extends pulumi.ComponentResource {
       description: args.oacDescription,
     }, { parent: this });
 
+    /** Response headers policy enforcing HSTS, X-Frame-Options, and X-Content-Type-Options. */
+    const responseHeadersPolicy = new aws.cloudfront.ResponseHeadersPolicy("security-headers", {
+      name: `${args.projectName}-security-headers`,
+      securityHeadersConfig: {
+        strictTransportSecurity: {
+          override: true,
+          accessControlMaxAgeSec: 31536000,
+          includeSubdomains: true,
+          preload: true,
+        },
+        frameOptions: {
+          override: true,
+          frameOption: "DENY",
+        },
+        contentTypeOptions: {
+          override: true,
+        },
+      },
+    }, { parent: this });
+
     /**
      * Extract the API Gateway domain from the full URL.
      * Input: "https://abc123.execute-api.ap-southeast-2.amazonaws.com"
@@ -116,6 +136,7 @@ export class CdnDistribution extends pulumi.ComponentResource {
         cachedMethods: ["GET", "HEAD"],
         compress: true,
         cachePolicyId: "658327ea-f89d-4fab-a63d-7e88639e58f6", // CachingOptimized
+        responseHeadersPolicyId: responseHeadersPolicy.id,
       },
 
       /* ─── /api/* behavior: proxy to API Gateway, no caching ─── */
@@ -129,6 +150,7 @@ export class CdnDistribution extends pulumi.ComponentResource {
           compress: true,
           cachePolicyId: "4135ea2d-6df8-44a3-9df3-4b5a84be39ad", // CachingDisabled
           originRequestPolicyId: "b689b0a8-53d0-40ab-baf2-68738e2966ac", // AllViewerExceptHostHeader
+          responseHeadersPolicyId: responseHeadersPolicy.id,
         },
         /* ─── /media/* behavior: signed URL access to media bucket ─── */
         {
@@ -140,6 +162,7 @@ export class CdnDistribution extends pulumi.ComponentResource {
           compress: true,
           trustedKeyGroups: [args.cfKeyGroupId],
           cachePolicyId: "658327ea-f89d-4fab-a63d-7e88639e58f6", // CachingOptimized
+          responseHeadersPolicyId: responseHeadersPolicy.id,
         },
       ],
 
