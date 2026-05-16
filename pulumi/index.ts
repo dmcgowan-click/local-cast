@@ -98,4 +98,5 @@ export const cloudfrontDomainName = cdn.distribution.domainName;
 export const cloudfrontDistributionId = cdn.distribution.id;
 export const apiGatewayEndpoint = apigw.api.apiEndpoint;
 export const frontendBucketName = frontend.bucket.bucket;
+export const credentialsSecretArn = secrets.credentialsSecret.arn;
 export const siteUrl = `https://${domain}`;
