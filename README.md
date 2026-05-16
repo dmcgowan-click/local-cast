@@ -65,9 +65,10 @@ The backend runs on container-based Lambda (arm64) which provides native **scale
 ├── pulumi/                  # Infrastructure as code (Pulumi + TypeScript)
 │   ├── components/          # Reusable Pulumi component resources
 │   └── index.ts             # Stack entrypoint
+├── scripts/                     # Utility scripts
+│   └── set-credentials.sh   # Set auth credentials in Secrets Manager
 ├── Makefile                 # Build and deploy targets
-├── REQUIREMENTS-FINAL.md    # Detailed requirements specification
-└── REQUIREMENTS-DRAFT.md    # Initial draft requirements
+└── REQUIREMENTS-FINAL.md    # Detailed requirements specification
 ```
 
 ## Prerequisites
@@ -82,24 +83,23 @@ The backend runs on container-based Lambda (arm64) which provides native **scale
 All build steps rsync source to `/home/ubuntu/workspace/` before running (mounted filesystem performance optimisation).
 
 ```bash
-# Prepare Pulumi dependencies
-make prepare-infra
-
-# Build backend Docker image
-make build-docker
-
-# Build and publish backend image to ECR
-make publish-docker
-
-# Build the Lambda authorizer
-make build-authorizer
-
 # Preview infrastructure changes
 make preview-infra
 
 # Deploy infrastructure (builds authorizer automatically)
 make up-infra
+
+# Build and push backend Docker image to ECR
+make deploy-server
+
+# Build and deploy frontend to S3 + invalidate CloudFront
+make deploy-client
+
+# Set username, password, and JWT secret in Secrets Manager
+make set-credentials
 ```
+
+Run `make help` to see all available targets.
 
 ## API Endpoints
 
