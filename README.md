@@ -2,6 +2,8 @@
 
 A cloud-hosted web application for browsing audio and video files stored in S3 and casting them to Chromecast devices on the local network. Media is streamed from AWS CloudFront via signed URLs.
 
+If you're a bit old school and still have local MP3's, MP4's, etc, and you want the convenience of casting them, this is for you!
+
 ## Architecture
 
 ```
@@ -121,9 +123,12 @@ Authentication uses a two-layer approach:
 ## Security
 
 - HTTPS enforced via CloudFront
-- S3 buckets are private (OAC for frontend, signed URLs for media)
+- CloudFront response headers policy: HSTS (1 year, preload), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`
+- S3 buckets are private (OAC for frontend and media, signed URLs for media streaming)
 - Credentials stored in AWS Secrets Manager
 - Session cookies: `HttpOnly`, `Secure`, `SameSite=Strict`
+- JWT signing and verification pinned to `HS256` algorithm
 - Prefix parameter validated to prevent path traversal
 - API Gateway Lambda authorizer enforces authentication at the infrastructure layer
 - Least-privilege IAM on Lambda execution role
+- CloudFront standard access logging enabled for audit and debugging

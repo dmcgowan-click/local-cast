@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import * as aws from "@pulumi/aws";
 import { EcrRepository } from "./components/ecr";
 import { SecretsManager } from "./components/secrets";
 import { FrontendBucket } from "./components/frontend";
@@ -84,6 +85,30 @@ const cdn = new CdnDistribution("cdn", {
 /* ─── Frontend bucket policy (applied after CDN exists to reference its ARN) ─── */
 frontend.applyBucketPolicy(cdn.distribution.arn);
 
+/* ─── Media bucket policy (grants CloudFront OAC read access to the pre-existing media bucket) ─── */
+new aws.s3.BucketPolicy("media-bucket-policy", {
+  bucket: mediaBucketName,
+  policy: cdn.distribution.arn.apply((distArn) =>
+    JSON.stringify({
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Sid: "AllowCloudFrontOAC",
+          Effect: "Allow",
+          Principal: { Service: "cloudfront.amazonaws.com" },
+          Action: "s3:GetObject",
+          Resource: `arn:aws:s3:::${mediaBucketName}/*`,
+          Condition: {
+            StringEquals: {
+              "AWS:SourceArn": distArn,
+            },
+          },
+        },
+      ],
+    }),
+  ),
+});
+
 /* ─── Route 53 alias records ─── */
 new DnsAliasRecords("dns-alias", {
   zoneId: dns.zone.zoneId,
@@ -98,5 +123,6 @@ export const cloudfrontDomainName = cdn.distribution.domainName;
 export const cloudfrontDistributionId = cdn.distribution.id;
 export const apiGatewayEndpoint = apigw.api.apiEndpoint;
 export const frontendBucketName = frontend.bucket.bucket;
+export const cdnLogBucketName = cdn.logBucket.bucket;
 export const credentialsSecretArn = secrets.credentialsSecret.arn;
 export const siteUrl = `https://${domain}`;
