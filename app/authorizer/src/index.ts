@@ -40,7 +40,7 @@ export async function handler(
 
     const token = sessionCookie.substring('session='.length);
     const jwtSecret = await getJwtSecret();
-    jwt.verify(token, jwtSecret);
+    jwt.verify(token, jwtSecret, { algorithms: ['HS256'] });
 
     return { isAuthorized: true, context: {} };
   } catch {

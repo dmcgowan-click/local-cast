@@ -13,11 +13,16 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Chromecast button. Visible only when a Cast device is discovered on the LAN.
+ * Toggles between starting and ending a Cast session.
+ */
 import { computed } from 'vue';
 import { castState, castAvailable, requestCastSession, stopCasting } from '@/services/cast';
 
 const isConnected = computed(() => castState.value === 'CONNECTED');
 
+/** Toggles the Cast session — connects if idle, disconnects if active. */
 function handleClick() {
   if (isConnected.value) {
     stopCasting();

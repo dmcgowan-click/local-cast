@@ -14,6 +14,10 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Login form component. Collects credentials and redirects
+ * to the media browser on successful authentication.
+ */
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { login } from '@/services/api';
@@ -25,6 +29,7 @@ const password = ref('');
 const error = ref('');
 const loading = ref(false);
 
+/** Submits credentials to the login endpoint and navigates on success. */
 async function handleLogin() {
   error.value = '';
   loading.value = true;

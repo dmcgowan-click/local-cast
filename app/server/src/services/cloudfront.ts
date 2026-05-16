@@ -14,7 +14,8 @@ export async function generateSignedUrl(objectKey: string): Promise<string> {
   if (!keyPairId) throw new Error('CLOUDFRONT_KEY_PAIR_ID not set');
 
   const privateKey = await getCloudFrontPrivateKey();
-  const url = `https://${domain}/media/${objectKey}`;
+  const encodedKey = objectKey.split('/').map((seg) => encodeURIComponent(seg)).join('/');
+  const url = `https://${domain}/media/${encodedKey}`;
   const dateLessThan = new Date(Date.now() + SIGNED_URL_EXPIRY_HOURS * 60 * 60 * 1000).toISOString();
 
   return getSignedUrl({

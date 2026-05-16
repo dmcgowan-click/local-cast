@@ -19,7 +19,6 @@ function isSupportedFile(key: string): boolean {
 
 /** Returns true if the prefix falls within the allowed top-level directories (Music/, Video/). */
 function isAllowedPrefix(prefix: string): boolean {
-  if (prefix === '') return true;
   return ALLOWED_PREFIXES.some((allowed) => prefix.startsWith(allowed));
 }
 
@@ -33,7 +32,11 @@ export async function browseMedia(prefix: string): Promise<BrowseResult> {
   if (!bucket) throw new Error('MEDIA_BUCKET not set');
 
   // Validate prefix to prevent path traversal
-  const normalised = prefix.replace(/\.\.\//g, '').replace(/\/\//g, '/');
+  const decoded = decodeURIComponent(prefix);
+  const normalised = decoded.replace(/\\/g, '/').replace(/\/\//g, '/');
+  if (normalised.includes('..')) {
+    throw new Error('Access denied: prefix outside allowed paths');
+  }
   if (!isAllowedPrefix(normalised)) {
     // If no prefix, return the top-level allowed prefixes as folders
     if (normalised === '') {

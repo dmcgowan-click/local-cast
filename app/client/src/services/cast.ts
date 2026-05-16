@@ -1,17 +1,26 @@
+/**
+ * Google Cast SDK integration. Handles Chromecast discovery, session
+ * management, and media loading. Exports reactive state so Vue components
+ * can show/hide the Cast button and route playback accordingly.
+ */
 import { ref } from 'vue';
 
+/** Current Cast SDK state (e.g. NO_DEVICES_AVAILABLE, NOT_CONNECTED, CONNECTED). */
 export const castState = ref<string>('NO_DEVICES_AVAILABLE');
+/** Whether at least one Chromecast device has been discovered on the LAN. */
 export const castAvailable = ref(false);
 
 let initialized = false;
 
+/**
+ * Initialises the Cast SDK. Handles the race condition where the SDK
+ * may have already called __onGCastApiAvailable before this module loaded.
+ */
 export function initCast(): void {
   if (initialized) return;
   initialized = true;
 
-  window.__onGCastApiAvailable = (isAvailable: boolean) => {
-    if (!isAvailable) return;
-
+  function setupCast() {
     const context = cast.framework.CastContext.getInstance();
     context.setOptions({
       receiverApplicationId: 'CC1AD845',
@@ -22,14 +31,26 @@ export function initCast(): void {
       castState.value = event.castState;
       castAvailable.value = event.castState !== cast.framework.CastState.NO_DEVICES_AVAILABLE;
     });
+  }
+
+  // If the SDK already called back before this module ran, initialise immediately
+  if ((window as any).__castApiAvailable) {
+    setupCast();
+  }
+
+  window.__onGCastApiAvailable = (isAvailable: boolean) => {
+    if (!isAvailable) return;
+    setupCast();
   };
 }
 
+/** Prompts the user to select a Chromecast device and starts a Cast session. */
 export async function requestCastSession(): Promise<void> {
   const context = cast.framework.CastContext.getInstance();
   await context.requestSession();
 }
 
+/** Maps a filename extension to its MIME type for Cast media loading. */
 export function getContentType(filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase() ?? '';
   const types: Record<string, string> = {
@@ -43,11 +64,16 @@ export function getContentType(filename: string): string {
   return types[ext] ?? 'video/mp4';
 }
 
+/** Returns true if the filename has a video extension (mp4, webm). */
 export function isVideo(filename: string): boolean {
   const ext = filename.split('.').pop()?.toLowerCase() ?? '';
   return ['mp4', 'webm'].includes(ext);
 }
 
+/**
+ * Sends a media load request to the active Chromecast session.
+ * If no session exists, prompts the user to select a device first.
+ */
 export async function castMedia(url: string, title: string, contentType: string): Promise<void> {
   const context = cast.framework.CastContext.getInstance();
   const session = context.getCurrentSession();
@@ -60,6 +86,7 @@ export async function castMedia(url: string, title: string, contentType: string)
   return loadMedia(session, url, title, contentType);
 }
 
+/** Builds a LoadRequest and sends it to the given Cast session. */
 async function loadMedia(
   session: cast.framework.CastSession,
   url: string,
@@ -76,6 +103,7 @@ async function loadMedia(
   await session.loadMedia(request);
 }
 
+/** Ends the current Cast session and stops playback on the device. */
 export function stopCasting(): void {
   const context = cast.framework.CastContext.getInstance();
   const session = context.getCurrentSession();

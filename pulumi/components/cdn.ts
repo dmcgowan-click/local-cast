@@ -38,6 +38,8 @@ export class CdnDistribution extends pulumi.ComponentResource {
   public readonly distribution: aws.cloudfront.Distribution;
   /** Origin Access Control used by the S3 origins. */
   public readonly oac: aws.cloudfront.OriginAccessControl;
+  /** S3 bucket receiving CloudFront standard access logs. */
+  public readonly logBucket: aws.s3.BucketV2;
 
   constructor(name: string, args: CdnDistributionArgs, opts?: pulumi.ComponentResourceOptions) {
     super("local-cast:components:CdnDistribution", name, args, opts);
@@ -49,6 +51,75 @@ export class CdnDistribution extends pulumi.ComponentResource {
       signingBehavior: "always",
       signingProtocol: "sigv4",
       description: args.oacDescription,
+    }, { parent: this });
+
+    /** CloudFront function to strip the /media prefix before forwarding to the S3 origin. */
+    const stripMediaPrefix = new aws.cloudfront.Function("strip-media-prefix", {
+      name: `${args.projectName}-strip-media-prefix`,
+      runtime: "cloudfront-js-2.0",
+      code: `function handler(event) {
+  var request = event.request;
+  request.uri = request.uri.replace(/^\\/media/, '');
+  return request;
+}`,
+    }, { parent: this });
+
+    /** S3 bucket for CloudFront standard access logs. */
+    this.logBucket = new aws.s3.BucketV2("cdn-log-bucket", {
+      bucketPrefix: `${args.projectName}-cdn-logs-`,
+      forceDestroy: true,
+    }, { parent: this });
+
+    new aws.s3.BucketOwnershipControls("cdn-log-bucket-ownership", {
+      bucket: this.logBucket.id,
+      rule: { objectOwnership: "BucketOwnerPreferred" },
+    }, { parent: this });
+
+    /** Response headers policy enforcing HSTS, X-Frame-Options, and X-Content-Type-Options. */
+    const responseHeadersPolicy = new aws.cloudfront.ResponseHeadersPolicy("security-headers", {
+      name: `${args.projectName}-security-headers`,
+      securityHeadersConfig: {
+        strictTransportSecurity: {
+          override: true,
+          accessControlMaxAgeSec: 31536000,
+          includeSubdomains: true,
+          preload: true,
+        },
+        frameOptions: {
+          override: true,
+          frameOption: "DENY",
+        },
+        contentTypeOptions: {
+          override: true,
+        },
+      },
+    }, { parent: this });
+
+    /**
+     * Response headers policy for media files. Adds CORS headers required by
+     * the Chromecast Default Media Receiver to fetch content via XHR.
+     */
+    const mediaHeadersPolicy = new aws.cloudfront.ResponseHeadersPolicy("media-headers", {
+      name: `${args.projectName}-media-headers`,
+      securityHeadersConfig: {
+        strictTransportSecurity: {
+          override: true,
+          accessControlMaxAgeSec: 31536000,
+          includeSubdomains: true,
+          preload: true,
+        },
+        contentTypeOptions: {
+          override: true,
+        },
+      },
+      corsConfig: {
+        accessControlAllowCredentials: false,
+        accessControlAllowHeaders: { items: ["*"] },
+        accessControlAllowMethods: { items: ["GET", "HEAD"] },
+        accessControlAllowOrigins: { items: ["*"] },
+        accessControlMaxAgeSec: 86400,
+        originOverride: true,
+      },
     }, { parent: this });
 
     /**
@@ -80,6 +151,12 @@ export class CdnDistribution extends pulumi.ComponentResource {
         geoRestriction: {
           restrictionType: "none",
         },
+      },
+
+      loggingConfig: {
+        bucket: this.logBucket.bucketRegionalDomainName,
+        includeCookies: false,
+        prefix: "cf-logs/",
       },
 
       /* ─── Origin 1: Frontend S3 bucket ─── */
@@ -116,6 +193,7 @@ export class CdnDistribution extends pulumi.ComponentResource {
         cachedMethods: ["GET", "HEAD"],
         compress: true,
         cachePolicyId: "658327ea-f89d-4fab-a63d-7e88639e58f6", // CachingOptimized
+        responseHeadersPolicyId: responseHeadersPolicy.id,
       },
 
       /* ─── /api/* behavior: proxy to API Gateway, no caching ─── */
@@ -129,6 +207,7 @@ export class CdnDistribution extends pulumi.ComponentResource {
           compress: true,
           cachePolicyId: "4135ea2d-6df8-44a3-9df3-4b5a84be39ad", // CachingDisabled
           originRequestPolicyId: "b689b0a8-53d0-40ab-baf2-68738e2966ac", // AllViewerExceptHostHeader
+          responseHeadersPolicyId: responseHeadersPolicy.id,
         },
         /* ─── /media/* behavior: signed URL access to media bucket ─── */
         {
@@ -140,6 +219,11 @@ export class CdnDistribution extends pulumi.ComponentResource {
           compress: true,
           trustedKeyGroups: [args.cfKeyGroupId],
           cachePolicyId: "658327ea-f89d-4fab-a63d-7e88639e58f6", // CachingOptimized
+          responseHeadersPolicyId: mediaHeadersPolicy.id,
+          functionAssociations: [{
+            eventType: "viewer-request",
+            functionArn: stripMediaPrefix.arn,
+          }],
         },
       ],
 
@@ -166,6 +250,7 @@ export class CdnDistribution extends pulumi.ComponentResource {
     this.registerOutputs({
       distribution: this.distribution,
       oac: this.oac,
+      logBucket: this.logBucket,
     });
   }
 }
