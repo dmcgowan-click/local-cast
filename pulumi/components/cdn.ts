@@ -23,6 +23,10 @@ export interface CdnDistributionArgs {
   oacDescription: string;
   /** Comment for the CloudFront distribution. */
   cdnComment: string;
+  /** ISO 3166-1 alpha-2 country codes to whitelist. Empty array disables geo-restriction. */
+  geoRestrictionCountries: string[];
+  /** Shared secret injected by CloudFront as a custom origin header to restrict direct API Gateway access. */
+  cloudFrontOriginSecret: pulumi.Output<string>;
 }
 
 /**
@@ -149,7 +153,8 @@ export class CdnDistribution extends pulumi.ComponentResource {
 
       restrictions: {
         geoRestriction: {
-          restrictionType: "none",
+          restrictionType: args.geoRestrictionCountries.length > 0 ? "whitelist" : "none",
+          locations: args.geoRestrictionCountries.length > 0 ? args.geoRestrictionCountries : undefined,
         },
       },
 
@@ -182,6 +187,10 @@ export class CdnDistribution extends pulumi.ComponentResource {
             originProtocolPolicy: "https-only",
             originSslProtocols: ["TLSv1.2"],
           },
+          customHeaders: [{
+            name: "x-origin-verify",
+            value: args.cloudFrontOriginSecret,
+          }],
         },
       ],
 

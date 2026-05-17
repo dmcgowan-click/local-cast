@@ -5,6 +5,9 @@ config:
   local-cast:mediaBucketName: dmcgowan-cloudstore
   local-cast:hostedZoneDomain: dmcgowan.click
   local-cast:credentialsSecretDescription: "Local Cast user credentials (username, passwordHash, jwtSecret)"
+  local-cast:geoRestrictionCountries:
+    - AU
+    - PH
   local-cast:cf:
     privateKeyDescription: "CloudFront signing private key for generating signed URLs"
     publicKeyComment: "Public key for Local Cast CloudFront signed URLs"

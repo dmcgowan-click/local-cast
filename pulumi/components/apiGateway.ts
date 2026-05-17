@@ -7,17 +7,22 @@ export interface ApiGatewayArgs {
   projectName: string;
   /** The Lambda function to proxy requests to. */
   lambdaFn: aws.lambda.Function;
-  /** The Lambda authorizer function for protected routes. */
+  /** The Lambda authorizer function for protected routes (cookie + origin header). */
   authorizerFn: aws.lambda.Function;
+  /** The Lambda authorizer function for unprotected routes (origin header only). */
+  originVerifyFn: aws.lambda.Function;
 }
 
 /**
  * API Gateway HTTP API with route-level authorization.
  *
- * Unprotected routes (/api/auth, /api/health) forward directly to the backend
- * Lambda. Protected routes (/api/media) require a valid session cookie verified
- * by a Lambda authorizer — unauthorized requests are rejected at the gateway
- * and never reach the backend, reducing DoS exposure.
+ * All routes require the x-origin-verify header injected by CloudFront,
+ * ensuring direct API Gateway access is blocked.
+ *
+ * Unprotected routes (/api/auth, /api/health) are validated by the origin-verify
+ * authorizer (header only). Protected routes (/api/media) require a valid session
+ * cookie verified by the full Lambda authorizer — unauthorized requests are
+ * rejected at the gateway and never reach the backend, reducing DoS exposure.
  *
  * Uses a default stage with auto-deploy and request throttling.
  */
@@ -43,10 +48,10 @@ export class ApiGateway extends pulumi.ComponentResource {
     }, { parent: this });
 
     /**
-     * Lambda authorizer for protected routes. Validates the JWT session cookie
-     * and caches the result for 5 minutes keyed on the Cookie header. Requests
-     * without a Cookie header are rejected immediately without invoking the
-     * authorizer Lambda.
+     * Lambda authorizer for protected routes. Validates the x-origin-verify
+     * header and the JWT session cookie. Caches the result for 5 minutes keyed
+     * on the Cookie and x-origin-verify headers. Requests missing either header
+     * are rejected immediately without invoking the authorizer Lambda.
      */
     const authorizer = new aws.apigatewayv2.Authorizer("lambda-authorizer", {
       apiId: this.api.id,
@@ -54,27 +59,46 @@ export class ApiGateway extends pulumi.ComponentResource {
       authorizerUri: args.authorizerFn.invokeArn,
       authorizerPayloadFormatVersion: "2.0",
       enableSimpleResponses: true,
-      identitySources: ["$request.header.cookie"],
+      identitySources: ["$request.header.cookie", "$request.header.x-origin-verify"],
       authorizerResultTtlInSeconds: 300,
     }, { parent: this });
 
-    /* ─── Unprotected routes ─── */
+    /**
+     * Origin-verify authorizer for unprotected routes. Validates only the
+     * x-origin-verify header to ensure requests come through CloudFront.
+     * Caches the result for 5 minutes keyed on the header value.
+     */
+    const originVerifyAuthorizer = new aws.apigatewayv2.Authorizer("origin-verify-authorizer", {
+      apiId: this.api.id,
+      authorizerType: "REQUEST",
+      authorizerUri: args.originVerifyFn.invokeArn,
+      authorizerPayloadFormatVersion: "2.0",
+      enableSimpleResponses: true,
+      identitySources: ["$request.header.x-origin-verify"],
+      authorizerResultTtlInSeconds: 300,
+    }, { parent: this });
 
-    /** Auth endpoints (login/logout) — no authorization required. */
+    /* ─── Routes verified by origin header only ─── */
+
+    /** Auth endpoints (login/logout) — origin-verify authorization only. */
     new aws.apigatewayv2.Route("auth-route", {
       apiId: this.api.id,
       routeKey: "ANY /api/auth/{proxy+}",
       target: pulumi.interpolate`integrations/${integration.id}`,
+      authorizationType: "CUSTOM",
+      authorizerId: originVerifyAuthorizer.id,
     }, { parent: this });
 
-    /** Health check — no authorization required. */
+    /** Health check — origin-verify authorization only. */
     new aws.apigatewayv2.Route("health-route", {
       apiId: this.api.id,
       routeKey: "GET /api/health",
       target: pulumi.interpolate`integrations/${integration.id}`,
+      authorizationType: "CUSTOM",
+      authorizerId: originVerifyAuthorizer.id,
     }, { parent: this });
 
-    /* ─── Protected routes ─── */
+    /* ─── Protected routes (origin header + session cookie) ─── */
 
     /** Media endpoints — requires valid session via Lambda authorizer. */
     new aws.apigatewayv2.Route("media-route", {
@@ -110,6 +134,14 @@ export class ApiGateway extends pulumi.ComponentResource {
       function: args.authorizerFn.name,
       principal: "apigateway.amazonaws.com",
       sourceArn: pulumi.interpolate`${this.api.executionArn}/authorizers/${authorizer.id}`,
+    }, { parent: this });
+
+    /** Grant API Gateway permission to invoke the origin-verify Lambda. */
+    new aws.lambda.Permission("apigw-origin-verify-permission", {
+      action: "lambda:InvokeFunction",
+      function: args.originVerifyFn.name,
+      principal: "apigateway.amazonaws.com",
+      sourceArn: pulumi.interpolate`${this.api.executionArn}/authorizers/${originVerifyAuthorizer.id}`,
     }, { parent: this });
 
     this.registerOutputs({

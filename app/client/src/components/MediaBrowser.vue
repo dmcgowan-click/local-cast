@@ -44,6 +44,12 @@
         <span class="icon">{{ isVideoFile(file.name) ? '🎬' : '🎵' }}</span>
         <span class="name">{{ file.name }}</span>
         <span class="size">{{ formatSize(file.size) }}</span>
+        <button
+          v-if="castAvailable"
+          class="cast-file-btn"
+          title="Cast to device"
+          @click.stop="playFile(file, true)"
+        >📺</button>
       </div>
       <div v-if="!folders.length && !files.length" class="empty">
         No media files found
@@ -148,23 +154,19 @@ function navigateTo(prefix: string) {
 }
 
 /**
- * Requests a signed URL and plays the file via Chromecast if connected,
- * otherwise falls back to local HTML5 playback.
+ * Requests a signed URL and plays the file. Sends to an active Chromecast
+ * session if one is connected, otherwise defaults to local browser playback.
+ * Pass cast=true to initiate a new Cast session for this file.
  */
-async function playFile(file: { key: string; name: string }) {
+async function playFile(file: { key: string; name: string }, cast = false) {
   loading.value = true;
   try {
     const url = await getSignedUrl(file.key);
-    const contentType = getContentType(file.name);
+    const shouldCast = cast || (castAvailable.value && castState.value === 'CONNECTED');
 
-    if (castAvailable.value && castState.value === 'CONNECTED') {
+    if (shouldCast && castAvailable.value) {
+      const contentType = getContentType(file.name);
       await castMedia(url, file.name, contentType);
-    } else if (castAvailable.value) {
-      try {
-        await castMedia(url, file.name, contentType);
-      } catch {
-        playLocally(url, file.name);
-      }
     } else {
       playLocally(url, file.name);
     }
@@ -328,6 +330,20 @@ onMounted(() => load(prefixFromRoute()));
   color: #888;
   font-size: 0.8rem;
   white-space: nowrap;
+}
+
+.cast-file-btn {
+  background: none;
+  border: 1px solid #555;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.cast-file-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .empty {

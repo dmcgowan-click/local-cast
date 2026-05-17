@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
+import * as random from "@pulumi/random";
 import { EcrRepository } from "./components/ecr";
 import { SecretsManager } from "./components/secrets";
 import { FrontendBucket } from "./components/frontend";
@@ -15,6 +16,12 @@ const domain = config.require("domain");
 const mediaBucketName = config.require("mediaBucketName");
 const hostedZoneDomain = config.require("hostedZoneDomain");
 const imageTag = config.get("imageTag") || "latest";
+const geoRestrictionCountries = config.getObject<string[]>("geoRestrictionCountries") || [];
+
+const cloudFrontOriginSecret = new random.RandomPassword("cloudfront-origin-secret", {
+  length: 64,
+  special: false,
+}).result;
 
 /* ─── Description / comment config values ─── */
 const credentialsSecretDescription = config.require("credentialsSecretDescription");
@@ -60,10 +67,16 @@ const lambda = new BackendLambda("backend", {
 const authorizer = new AuthorizerLambda("authorizer", {
   projectName,
   credentialsSecretArn: secrets.credentialsSecret.arn,
+  cloudFrontOriginSecret,
 });
 
 /* ─── API Gateway ─── */
-const apigw = new ApiGateway("api", { projectName, lambdaFn: lambda.fn, authorizerFn: authorizer.fn });
+const apigw = new ApiGateway("api", {
+  projectName,
+  lambdaFn: lambda.fn,
+  authorizerFn: authorizer.fn,
+  originVerifyFn: authorizer.originVerifyFn,
+});
 
 /* ─── DNS + ACM certificate (us-east-1) ─── */
 const dns = new DnsCertificate("dns", { domain, hostedZoneDomain });
@@ -80,6 +93,8 @@ const cdn = new CdnDistribution("cdn", {
   domain,
   oacDescription: cf.oacDescription,
   cdnComment: cf.cdnComment,
+  geoRestrictionCountries,
+  cloudFrontOriginSecret,
 });
 
 /* ─── Frontend bucket policy (applied after CDN exists to reference its ARN) ─── */
