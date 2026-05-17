@@ -50,9 +50,9 @@ The backend runs on container-based Lambda (arm64) which provides native **scale
 
 ## Features
 
-- **Media browsing** — Navigate folders and files in S3 (`Music/` and `Video/` prefixes)
+- **Media browsing** — Navigate folders and files in S3 with URL-based routing (deep-linkable, supports browser back/forward)
 - **Chromecast support** — Cast audio/video to Chromecast devices on the LAN via the Google Cast SDK (Default Media Receiver)
-- **Local playback** — HTML5 `<audio>`/`<video>` fallback when no Chromecast is available
+- **Local playback** — Clicking a file plays it locally via the inline HTML5 `<audio>`/`<video>` player by default; casting only occurs when explicitly requested or a Chromecast session is already connected
 - **Supported formats** — `.mp4`, `.webm`, `.mp3`, `.flac`, `.aac`, `.ogg`
 - **Signed URL streaming** — Media served via CloudFront signed URLs (6-hour expiry)
 
